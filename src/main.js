@@ -1,5 +1,5 @@
 import { Application, Container, BlurFilter } from 'pixi.js';
-import { createSnowLayer } from './snow.js';
+import { createSnowLayer, createIntricateLayer } from './snow.js';
 import { createBackground } from './background.js';
 
 async function init() {
@@ -45,6 +45,10 @@ async function init() {
     snowLayers.push(layer);
   }
 
+  // === HERO LAYER: Intricate detailed snowflakes ===
+  const intricateLayer = createIntricateLayer(width, height);
+  app.stage.addChild(intricateLayer.container);
+
   // Handle resize
   window.addEventListener('resize', () => {
     // Layers will adapt on next frame
@@ -58,6 +62,9 @@ async function init() {
     for (const layer of snowLayers) {
       layer.update(elapsed, app.screen.width, app.screen.height);
     }
+
+    // Update hero layer
+    intricateLayer.update(elapsed, app.screen.width, app.screen.height);
   });
 }
 
