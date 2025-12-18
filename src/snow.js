@@ -1,111 +1,149 @@
-import * as THREE from 'three';
+import { Container, Graphics, RenderTexture, Sprite, Application } from 'pixi.js';
 
-const SNOW_COUNT = 3000;
-const SNOW_AREA = { width: 3.5, height: 4, depth: 2 };
-const WINDOW_CENTER = { x: 0, y: 2.2, z: -4 };
+// Generate a procedural snowflake texture
+function createSnowflakeGraphics(size, complexity = 6) {
+  const g = new Graphics();
+  const arms = 6;
+  const armLength = size * 0.45;
 
-export function createSnowSystem() {
-  const group = new THREE.Group();
+  g.setStrokeStyle({ width: size * 0.08, color: 0xffffff, cap: 'round' });
 
-  // Create snowflake texture procedurally
-  const canvas = document.createElement('canvas');
-  canvas.width = 64;
-  canvas.height = 64;
-  const ctx = canvas.getContext('2d');
+  // Draw 6-fold symmetrical arms
+  for (let i = 0; i < arms; i++) {
+    const angle = (i / arms) * Math.PI * 2 - Math.PI / 2;
 
-  // Soft radial gradient for snowflake
-  const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-  gradient.addColorStop(0.2, 'rgba(255, 255, 255, 0.9)');
-  gradient.addColorStop(0.5, 'rgba(240, 248, 255, 0.5)');
-  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    // Main arm
+    const endX = Math.cos(angle) * armLength;
+    const endY = Math.sin(angle) * armLength;
 
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, 64, 64);
+    g.moveTo(0, 0);
+    g.lineTo(endX, endY);
 
-  const snowTexture = new THREE.CanvasTexture(canvas);
+    // Side branches (vary by complexity)
+    if (complexity > 3) {
+      const branchPos = 0.5 + Math.random() * 0.2;
+      const branchLength = armLength * (0.3 + Math.random() * 0.2);
+      const branchAngle1 = angle - Math.PI / 6;
+      const branchAngle2 = angle + Math.PI / 6;
 
-  // Create particles
-  const geometry = new THREE.BufferGeometry();
-  const positions = new Float32Array(SNOW_COUNT * 3);
-  const sizes = new Float32Array(SNOW_COUNT);
-  const velocities = new Float32Array(SNOW_COUNT * 3);
-  const phases = new Float32Array(SNOW_COUNT);
+      const bx = Math.cos(angle) * armLength * branchPos;
+      const by = Math.sin(angle) * armLength * branchPos;
 
-  for (let i = 0; i < SNOW_COUNT; i++) {
-    const i3 = i * 3;
+      g.moveTo(bx, by);
+      g.lineTo(bx + Math.cos(branchAngle1) * branchLength, by + Math.sin(branchAngle1) * branchLength);
 
-    // Position snowflakes behind the window
-    positions[i3] = WINDOW_CENTER.x + (Math.random() - 0.5) * SNOW_AREA.width;
-    positions[i3 + 1] = WINDOW_CENTER.y + (Math.random() - 0.5) * SNOW_AREA.height * 2;
-    positions[i3 + 2] = WINDOW_CENTER.z - Math.random() * SNOW_AREA.depth;
-
-    // Varied sizes - larger particles
-    const depthFactor = (positions[i3 + 2] - (WINDOW_CENTER.z - SNOW_AREA.depth)) / SNOW_AREA.depth;
-    sizes[i] = 0.03 + depthFactor * 0.05 + Math.random() * 0.03;
-
-    // Velocities
-    velocities[i3] = (Math.random() - 0.5) * 0.08;
-    velocities[i3 + 1] = -(0.2 + Math.random() * 0.3);
-    velocities[i3 + 2] = (Math.random() - 0.5) * 0.02;
-
-    phases[i] = Math.random() * Math.PI * 2;
-  }
-
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-
-  const snowData = { velocities, phases };
-
-  // Simpler, more visible material
-  const material = new THREE.PointsMaterial({
-    size: 0.08,
-    map: snowTexture,
-    transparent: true,
-    opacity: 0.9,
-    depthWrite: false,
-    blending: THREE.NormalBlending,
-    sizeAttenuation: true,
-    color: 0xffffff
-  });
-
-  const points = new THREE.Points(geometry, material);
-  group.add(points);
-
-  function update(delta, elapsed) {
-    const positions = geometry.attributes.position.array;
-
-    for (let i = 0; i < SNOW_COUNT; i++) {
-      const i3 = i * 3;
-
-      // Apply velocity
-      positions[i3] += snowData.velocities[i3] * delta;
-      positions[i3 + 1] += snowData.velocities[i3 + 1] * delta;
-      positions[i3 + 2] += snowData.velocities[i3 + 2] * delta;
-
-      // Sinusoidal drift
-      const phase = snowData.phases[i];
-      positions[i3] += Math.sin(elapsed * 0.5 + phase) * 0.003;
-      positions[i3] += Math.sin(elapsed * 1.5 + phase * 2) * 0.002;
-
-      // Reset if fallen too far
-      if (positions[i3 + 1] < WINDOW_CENTER.y - SNOW_AREA.height * 1.5) {
-        positions[i3 + 1] = WINDOW_CENTER.y + SNOW_AREA.height;
-        positions[i3] = WINDOW_CENTER.x + (Math.random() - 0.5) * SNOW_AREA.width;
-        positions[i3 + 2] = WINDOW_CENTER.z - Math.random() * SNOW_AREA.depth;
-      }
-
-      // Horizontal bounds
-      const halfWidth = SNOW_AREA.width / 2;
-      if (positions[i3] < WINDOW_CENTER.x - halfWidth) {
-        positions[i3] = WINDOW_CENTER.x + halfWidth;
-      } else if (positions[i3] > WINDOW_CENTER.x + halfWidth) {
-        positions[i3] = WINDOW_CENTER.x - halfWidth;
-      }
+      g.moveTo(bx, by);
+      g.lineTo(bx + Math.cos(branchAngle2) * branchLength, by + Math.sin(branchAngle2) * branchLength);
     }
 
-    geometry.attributes.position.needsUpdate = true;
+    // Smaller secondary branches
+    if (complexity > 5) {
+      const branch2Pos = 0.75;
+      const branch2Length = armLength * 0.2;
+
+      const b2x = Math.cos(angle) * armLength * branch2Pos;
+      const b2y = Math.sin(angle) * armLength * branch2Pos;
+
+      g.moveTo(b2x, b2y);
+      g.lineTo(b2x + Math.cos(angle - Math.PI / 5) * branch2Length, b2y + Math.sin(angle - Math.PI / 5) * branch2Length);
+
+      g.moveTo(b2x, b2y);
+      g.lineTo(b2x + Math.cos(angle + Math.PI / 5) * branch2Length, b2y + Math.sin(angle + Math.PI / 5) * branch2Length);
+    }
   }
 
-  return { group, update };
+  g.stroke();
+
+  // Center dot
+  g.circle(0, 0, size * 0.06);
+  g.fill(0xffffff);
+
+  return g;
+}
+
+// Simple circle snowflake for small sizes
+function createSimpleSnowflake(size) {
+  const g = new Graphics();
+
+  // Soft radial gradient effect using concentric circles
+  const steps = 3;
+  for (let i = steps; i >= 0; i--) {
+    const radius = (size / 2) * ((i + 1) / (steps + 1));
+    const alpha = 1 - (i / (steps + 1)) * 0.5;
+    g.circle(0, 0, radius);
+    g.fill({ color: 0xffffff, alpha });
+  }
+
+  return g;
+}
+
+export function createSnowLayer(screenWidth, screenHeight, config) {
+  const container = new Container();
+  const { count, sizeRange, speedRange, opacity, drift } = config;
+
+  const snowflakes = [];
+
+  for (let i = 0; i < count; i++) {
+    const size = sizeRange[0] + Math.random() * (sizeRange[1] - sizeRange[0]);
+
+    // Use detailed snowflakes for larger sizes, simple for small
+    let flake;
+    if (size > 12) {
+      flake = createSnowflakeGraphics(size, 6);
+    } else if (size > 6) {
+      flake = createSnowflakeGraphics(size, 4);
+    } else {
+      flake = createSimpleSnowflake(size);
+    }
+
+    flake.x = Math.random() * screenWidth;
+    flake.y = Math.random() * screenHeight;
+    flake.alpha = opacity * (0.7 + Math.random() * 0.3);
+
+    // Store animation data
+    flake.userData = {
+      speed: speedRange[0] + Math.random() * (speedRange[1] - speedRange[0]),
+      wobbleFreq: 0.5 + Math.random() * 1.5,
+      wobbleAmp: 20 + Math.random() * 40 * drift,
+      phase: Math.random() * Math.PI * 2,
+      rotationSpeed: (Math.random() - 0.5) * 0.5,
+      baseX: flake.x,
+    };
+
+    container.addChild(flake);
+    snowflakes.push(flake);
+  }
+
+  function update(elapsed, width, height) {
+    for (const flake of snowflakes) {
+      const data = flake.userData;
+
+      // Fall
+      flake.y += data.speed * 0.016;
+
+      // Wobble (sinusoidal drift)
+      flake.x = data.baseX + Math.sin(elapsed * data.wobbleFreq + data.phase) * data.wobbleAmp;
+
+      // Gentle rotation for detailed flakes
+      flake.rotation += data.rotationSpeed * 0.016;
+
+      // Reset when off screen
+      if (flake.y > height + 50) {
+        flake.y = -50;
+        data.baseX = Math.random() * width;
+        flake.x = data.baseX;
+      }
+
+      // Wrap horizontally
+      if (flake.x < -50) {
+        data.baseX += width + 100;
+        flake.x = data.baseX;
+      } else if (flake.x > width + 50) {
+        data.baseX -= width + 100;
+        flake.x = data.baseX;
+      }
+    }
+  }
+
+  return { container, update };
 }

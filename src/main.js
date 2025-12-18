@@ -1,84 +1,64 @@
-import * as THREE from 'three';
-import { EffectComposer, RenderPass, BloomEffect, EffectPass, VignetteEffect } from 'postprocessing';
-import { createRoom } from './room.js';
-import { createSnowSystem } from './snow.js';
-import { createLighting } from './lighting.js';
+import { Application, Container, BlurFilter } from 'pixi.js';
+import { createSnowLayer } from './snow.js';
+import { createBackground } from './background.js';
 
-// Scene setup
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1a1a2e);
-scene.fog = new THREE.Fog(0x1a1a2e, 8, 20);
+async function init() {
+  const app = new Application();
 
-// Camera - positioned to view the cozy room
-const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.set(0, 1.5, 6);
-camera.lookAt(0, 1, 0);
+  await app.init({
+    background: '#0d1117',
+    resizeTo: window,
+    antialias: true,
+    resolution: window.devicePixelRatio || 1,
+    autoDensity: true,
+  });
 
-// Renderer
-const renderer = new THREE.WebGLRenderer({
-  antialias: true,
-  powerPreference: 'high-performance'
-});
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.2;
-document.body.appendChild(renderer.domElement);
+  document.body.appendChild(app.canvas);
 
-// Post-processing
-const composer = new EffectComposer(renderer);
-composer.addPass(new RenderPass(scene, camera));
+  const width = app.screen.width;
+  const height = app.screen.height;
 
-const bloomEffect = new BloomEffect({
-  intensity: 0.5,
-  luminanceThreshold: 0.6,
-  luminanceSmoothing: 0.3,
-  mipmapBlur: true
-});
+  // Background with warm bokeh
+  const background = createBackground(width, height);
+  app.stage.addChild(background);
 
-const vignetteEffect = new VignetteEffect({
-  darkness: 0.4,
-  offset: 0.3
-});
+  // Snow layers (back to front)
+  // Each layer: { count, sizeRange, speedRange, opacity, blur, drift }
+  const layerConfigs = [
+    { count: 40, sizeRange: [2, 4], speedRange: [15, 25], opacity: 0.3, blur: 0, drift: 0.3 },
+    { count: 60, sizeRange: [3, 6], speedRange: [25, 40], opacity: 0.4, blur: 0, drift: 0.4 },
+    { count: 80, sizeRange: [5, 10], speedRange: [40, 60], opacity: 0.6, blur: 0, drift: 0.5 },
+    { count: 50, sizeRange: [10, 18], speedRange: [60, 90], opacity: 0.7, blur: 1, drift: 0.7 },
+    { count: 25, sizeRange: [20, 35], speedRange: [90, 130], opacity: 0.5, blur: 3, drift: 1.0 },
+  ];
 
-composer.addPass(new EffectPass(camera, bloomEffect, vignetteEffect));
+  const snowLayers = [];
 
-// Build the scene
-const room = createRoom();
-scene.add(room);
+  for (const config of layerConfigs) {
+    const layer = createSnowLayer(width, height, config);
 
-const lighting = createLighting();
-scene.add(lighting);
+    if (config.blur > 0) {
+      layer.container.filters = [new BlurFilter({ strength: config.blur, quality: 3 })];
+    }
 
-const snowSystem = createSnowSystem();
-scene.add(snowSystem.group);
+    app.stage.addChild(layer.container);
+    snowLayers.push(layer);
+  }
 
-// Handle resize
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  composer.setSize(window.innerWidth, window.innerHeight);
-});
+  // Handle resize
+  window.addEventListener('resize', () => {
+    // Layers will adapt on next frame
+  });
 
-// Animation loop
-const clock = new THREE.Clock();
+  // Animation
+  let elapsed = 0;
+  app.ticker.add((ticker) => {
+    elapsed += ticker.deltaTime / 60;
 
-function animate() {
-  requestAnimationFrame(animate);
-
-  const delta = clock.getDelta();
-  const elapsed = clock.getElapsedTime();
-
-  // Update snow
-  snowSystem.update(delta, elapsed);
-
-  // Subtle camera breathing
-  camera.position.y = 1.5 + Math.sin(elapsed * 0.3) * 0.02;
-
-  composer.render();
+    for (const layer of snowLayers) {
+      layer.update(elapsed, app.screen.width, app.screen.height);
+    }
+  });
 }
 
-animate();
+init().catch(console.error);

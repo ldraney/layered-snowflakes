@@ -15,7 +15,9 @@
       "Bash(git branch:*)",
       "Bash(git reset:*)",
       "Bash(git rm -rf .)",
-      "Bash(git clean:*)"
+      "Bash(git clean:*)",
+      "Bash(cmd.exe /c start http://localhost:5174/)",
+      "Bash(pkill:*)"
     ]
   }
 }
